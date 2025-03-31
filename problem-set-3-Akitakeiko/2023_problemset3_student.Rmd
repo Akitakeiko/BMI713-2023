@@ -1,0 +1,564 @@
+---
+title: 'BMI 713 Problem Set #3, Fall 2023 (80 points total)'
+author: "Cheryl Gu"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+
+# Overview
+
+
+## Learning objectives
+
+After attending lecture and upon completion of this problem set you should be able to do the following: 
+
+From Lecture 7:
+
+*Choose appropriate similarity criteria for a research question
+*Describe and compare distance metrics
+*Calculate distances and construct a distance matrix in R
+*Interpret distances in a dendrogram
+*Choose an appropriate standardization strategy for a data set
+*Construct a dendrogram from a distance matrix with hclust
+*Use cutree to define hierarchical clusters
+
+From Lecture 8:
+
+*Execute k means clustering in R
+*Compare centroid selection methods
+*Compare hierarchical vs. k means clustering
+*Use cluster metrics and elbow method to select parameters (height, k)
+*Identify downstream analyses to conduct after clustering
+
+## Instructions
+
+You will be submitting this assignment via GitHub Classroom. Your submission will be recorded when you push a commit to the repository on GitHub Classroom (instructions below), and you can make as many commits as you want before the deadline. We will grade assignments based on the latest commit.
+
+### How to commit code to GitHub
+
+1.  Open either GitHub Desktop or a command line terminal and navigate to the repository that contains this assignment (via the GUI or cd command)
+2.  Add the new or modified files to the staging area by either checking the box next to the files or using the command "git add \<filename(s)\>"
+3.  Commit the changes. You are required to include a commit message. This is found in the small text box near the commit button on GitHub Desktop or using the command "git commit -m 'commit message goes here'"
+4.  Push your changes and files to the remote repository. This is done by pressing the push to origin button on GitHub Classroom or with the command "git push"
+
+### What to Submit
+
+You will need to submit **both** an R Markdown file and a knitted HTML or PDF for this assignment. When you finish the assignment, make sure to press the arrow next to the "Knit" button near the top panel of RStudio and select the option to knit to HTML or PDF. Make sure the new HTML or PDF appears in your repository and then follow the steps to commit and push to GitHub classroom. If you are having trouble knitting with the `{txt}` chunks, you can remove those chunks and type your answers outside of the chunks with clear labels.
+
+### Important note: random seed
+
+As we've learned in class, clustering algorithms often involve random initializations and/or random choices between ties. *At the top of any `{r}` chunk that calls the kmeans clustering algorithm, set your seed equal to 713.*
+
+# Problem 1 (23 pts) 
+
+## Clustering body parts
+
+In this question, we will be exploring the relationship between injured body parts and the products that caused the injuries in the `neiss_2013_2018` data.
+
+```{r}
+# Load necessary packages here
+library(bmi713neiss)
+library(tidyverse)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+library(cowplot)
+```
+
+### 1.1 (4 points)
+
+Summarize the `neiss_2013_2018` dataset into a counts table saved as a variable called `counts` where:
+
+  - Each row is a body part, and each column is a product code
+  - Each entry in the table should contain the total number of injuries observed for the corresponding body part and product
+  - Remove the column with body part and make the body parts the row names instead
+  
+(Tip 1: If you use a function that generates NAs by design, make sure to fill in the resultant NAs with 0.) 
+(Tip 2: If you are manually setting row names, make sure your object is of a class that allows row names, and convert it if not.)
+
+```{r}
+counts <- neiss_2013_2018 %>%
+  group_by(Body_Part, Product_code) %>%
+  summarise(counts=n()) %>%
+  pivot_wider(id_cols = Body_Part, names_from = Product_code, values_from = counts) %>%
+  column_to_rownames(var = "Body_Part") %>%
+  mutate_all(~replace(., is.na(.), 0))
+```
+
+### 1.2 (2 point)
+
+Now, create a distance matrix called `euclid_dist_table` that stores the **Euclidean** distances between each pair of body parts based on injury counts per product.
+
+```{r}
+euclid_dist_table <- dist(counts, method="euclidean")
+```
+
+### 1.3 (2 points)
+
+Create a dendrogram from these data using an agglomerative hierarchical approach with average linkage, and plot the resulting dendrogram.
+
+```{r}
+dend <- hclust(euclid_dist_table, method = "average")
+plot(dend)
+```
+
+### 1.4 (2 points)
+
+Are there body parts with small distances in the dendrogram that are unlikely to be injured by similar products? Are there body parts with *large* distances in the dendrogram that are *likely* to be caused by similar products? Give one example.
+
+```{txt}
+Elbow and mouth are in very small distances in the dendrogram, however, they are unlikely to be injured by similar products in reality. Ankle and elbow, though they are in very large distances, they may very likely to be caused by similar products.
+```
+
+### 1.5 (3 points)
+
+List three things that you could change in the steps you took to generate this dendrogram that would change the resulting dendrogram.
+
+```{txt}
+1. Distance metric, we can change method to "manhattan"
+2. Linkage method, we can change method to "complete".
+3. Divisive Hierarchical Clustering, we can switch to the (top-down) divisive approach, using diana() instead of hclust() 
+(reference cite: https://www.datanovia.com/en/lessons/divisive-hierarchical-clustering/)
+```
+
+### 1.6 (3 points)
+
+You talk to a classmate who suggests that the variables you're clustering on may not have similar ranges of values. Assess this in the data by checking if any variables have variance that is >2x the variance of another variable. (Hint: The `var` function calculates the variance of a vector.)
+
+```{r}
+# Add your code below
+variances <- tibble(Variance = sapply(counts, var))
+result <- variances %>%
+  filter(Variance > 2 * min(Variance)) %>%
+  summarize(counts = n())
+print(result)
+```
+
+```{txt}
+# Do any variables have very different variances? (e.g., >2x different)
+# Write your answer below
+The majority of the counts dataset, 779 out of 795 variables have very different variances.
+```
+
+### 1.7 (3 points)
+
+If the issue the classmate brought up in 1.6 was affecting our data, what could we change in our code to address it? To be on the safe side, incorporate this change, re-make the dendrogram, and plot the results.
+
+```{txt}
+# What can we change in our code to address the issue raised in 1.6?
+# Write your answer below
+We can standardize the counts data by using scale() function, transforming each variable to have a mean of 0 and a standard deviation of 1, this function would scale each column of the entire data frame.
+```
+
+```{r}
+counts_scaled <- scale(counts)
+euclid_dist_table_scaled<- dist(counts_scaled, method = "euclidean")
+dend_scaled <- hclust(euclid_dist_table_scaled, method = "average")
+plot(dend_scaled)
+```
+
+### 1.8 (2 points)
+
+In 1-2 sentences, compare the dendrogram from 1.7 to the dendrogram in 1.3. Which dendrogram better matches your prior knowledge about body parts and their similarities?
+
+```{txt}
+The second dendrogram with standardized data matches my prior knowlege better. For example, ankle and knee now have much more closer distance with each other than before.
+```
+
+### 1.9 (2 points)
+
+Which body part merged with the others last? What does this suggest?
+
+```{txt}
+Finger merged with the others last, meaning it is substantially different from the distribution in the remaining branches, as being the most distinct body part to the others. It makes sense that the injuries on finger maybe more random, or accidental, since we use fingers more frequently in daily life, it is more likely fingers get hurt compared to other body parts since we "exposed" them to a variety settings with different product use.
+```
+
+# Problem 2 (19 points)
+
+## Exploring a new distance metric
+
+### 2.1 (2 points)
+
+In this question, we will use a subset of the NEISS data. Read `neiss_sample_PS3.csv` into a variable called `neiss_subset`.
+
+```{r}
+neiss_subset <- read.csv("/Users/akitakeiko/Documents/GitHub/problem-set-3-Akitakeiko/neiss_sample_PS3.csv")
+```
+
+### 2.2 (2 points)
+
+To cluster injuries, we will use the narratives. This information is stored in the `Narrative_1` and `Narrative_2` columns. Filter the `neiss_subset` data to include injuries with at least one narrative present (at least one of `Narrative_1` or `Narrative_2` is not NA).  
+
+```{r}
+neiss_subset <- neiss_subset %>%
+  filter(!is.na(Narrative_1) | !is.na(Narrative_2))
+```
+
+### 2.3 (1 point)
+
+Look at a couple rows of `neiss_subset` with both `Narrative_1` and `Narrative_2` present. What seems to be the relationship between these two columns?
+
+```{txt}
+These two columns added up together become a full sentence of the narrative.
+```
+
+### 2.4 (3 points)
+
+Create a new column `full_narrative` that combines Narrative_1 and Narrative_2 for each observation into a full sentence/paragraph. Be sure to handle NAs and spacing appropriately.
+
+```{r}
+neiss_subset <- neiss_subset %>% 
+  mutate(full_narrative = case_when(
+    is.na(Narrative_1) ~ Narrative_2,
+    is.na(Narrative_2) ~ Narrative_1,
+    TRUE ~ paste(as.character(Narrative_1)
+                 , " ",
+                 as.character(Narrative_2))
+  ))
+```
+
+
+### 2.5 (4 points)
+
+One way to estimate similarity between narratives would be to measure the overlap in words between two narratives. Run the first line of code below to create a new column in `neiss_subset` that stores each narrative as an R list of words.
+
+```{r}
+neiss_subset$word_set = sapply(neiss_subset$full_narrative, function(x) strsplit(x, " "))
+```
+
+One distance metric that allows us to quantify overlap between two sets is the Jaccard similarity metric. This metric is calculated as: (the number of items in both sets)/(the number of unique items across both sets). 
+
+Here's an example: if I have set A = (x, y, y, y, y, y, z) and set B = (x, y), the number of items in both sets = 2 (x and y) and the number of unique items across both sets = 3 (x, y, and z). So, the Jaccard similarity is 2/3. 
+
+There's no built-in function to calculate Jaccard similarity. Write your own function called `jaccard_sim` below to calculate the Jaccard similarity between two input vectors a and b. (Hint: R has built-in functions called `intersect` and `unique` that might help you complete this task.)
+
+```{r}
+# Add your code below
+jaccard_sim <- function(a, b){
+  num_intersection <- length(intersect(a, b))
+  num_union <- length(unique(c(a, b)))
+  return(num_intersection / num_union)
+}
+```
+
+### 2.6 (2 points)
+
+To check your `jaccard_sim()` function, run the test cases below. Add at least one more test case of your own.
+
+```{r}
+jaccard_sim(c("x", "y", "y", "y", "y", "y", "z"), c("x", "y")) ##should return 0.67
+jaccard_sim(c("x"), c("y", "z"))  ##should return 0
+# Add your test case below
+jaccard_sim(c("x", "y", "y", "y", "z", "z"), c("x", "z", "k"))
+```
+
+### 2.7 (5 points)
+Use your jaccard_sim() function to find the injury in the `neiss_subset` table that is most similar to the injury in row **128**. Print the narratives for these two injuries. Are these indeed similar injuries?
+
+```{r}
+# Add your code below
+wordset_row_128 <- neiss_subset$word_set[[128]]
+similarity_table <- sapply(neiss_subset$word_set,
+                           function(x) jaccard_sim(wordset_row_128, x))
+
+similarity_table[128] <- -123
+most_similar_row <- which.max(similarity_table)
+cat("Narrative in the targeted row 128:", 
+    neiss_subset$full_narrative[128], "\n")
+cat("Narrative in the most similar row:", 
+    neiss_subset$full_narrative[most_similar_row], "\n")
+
+```
+
+```{txt}
+# Are these indeed similar injuries?
+# Write your answers below
+These are very similar injuries, both male around 10 years old, both get injuried by jammed finger on soccer ball.
+```
+
+# Problem 3 (13 points)
+
+## Clustering on a dendrogram
+
+### 3.1 (2 points)
+
+Make sure the R package `Matrix` is installed. Once this is installed, run the code below to use your `jaccard_sim()` function to construct a Jaccard distance matrix for the lists of words from the injury narratives.  
+
+```{r}
+### Creating the Jaccard distance matrix
+library(Matrix)
+
+M = matrix(nrow=nrow(neiss_subset), ncol=nrow(neiss_subset))
+for (i in 2:nrow(M)){
+  for (j in 1:(i-1)){
+    M[i,j] = jaccard_sim(unlist(neiss_subset$word_set[i]), unlist(neiss_subset$word_set[j]))
+  }
+}
+diag(M) = 1
+M = Matrix::forceSymmetric(M,uplo="L")
+rownames(M) = neiss_subset$CPSC_Case_Number
+colnames(M) = neiss_subset$CPSC_Case_Number
+
+D = as.dist(1-M) # Jaccard distance matrix
+```
+
+Now, the `D` matrix contains Jaccard distance between injuries, ranging from 0 (completely similar) to 1 (completely different). Use `D` as your distance matrix to build an agglomerative hierarchical dendrogram with complete linkage.
+
+```{r}
+# Add your code below
+hclusters <- hclust(D, method = "complete")
+```
+
+### 3.2 (4 points)
+
+Now, in order to delineate clusters, we have to decide where to cut the tree. What's the smallest number of clusters possible (besides 1) in this clustering solution? There are many ways you can determine this. Either explain how you determined this visually or show the code you used to find out. (Hint: there is some useful information inside the dendrogram object you created with `hclust`. Use the documentation for `hclust` to learn more.)
+
+```{r}
+# Add your code below
+plot(hclusters)
+max_height <- max(hclusters$height[hclusters$height < 1])
+
+# Draw a horizontal line at that height
+abline(h = max_height, col = "red", lty = 2)
+print(length((unique(cutree(hclusters, h=max_height)))))
+```
+
+
+```{txt}
+# What's the smallest number of clusters possible (besides 1) in this clustering solution?
+# Write your answer below
+The smallest numbre of clusters possible is 51.
+```
+
+
+### 3.4 (2 points)
+
+Cut the tree at a height that produces the fewest clusters (besides 1), and save the resulting cluster assignment for each injury in a new column in `neiss_subset`.
+
+```{r}
+# Cut the dendrogram at the highest height to get two clusters
+cluster_assignments<- cutree(hclusters, h = max_height)
+neiss_subset$cluster <- cluster_assignments
+```
+
+### 3.5 (5 points)
+
+To begin interpreting what these clusters might represent, create at least two stacked barplots with cluster ID number on the x axis and the injury count on the y axis. In each plot, set `fill=` some informative column of `neiss_subset`. (e.g. `Diagnosis`, `Body_Part`...)  Write 1 sentence about your observations of the composition of the clusters with respect to the variables you visualized.
+
+```{r}
+# Add your code below
+ggplot(neiss_subset, aes(x = factor(cluster), fill = Diagnosis)) +
+  geom_bar() +
+  labs(title = "Cluster ID vs. Injury Count",
+       x = "Cluster ID",
+       y = "Injury Count") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(neiss_subset, aes(x = factor(cluster), fill = Body_Part)) +
+  geom_bar() +
+  labs(title = "Cluster ID vs. Injury Count",
+       x = "Cluster ID",
+       y = "Injury Count") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{txt}
+# Write 1 sentence about your observations.
+# Write your answer below
+Both Diagonsis and Body_part are informative features describing the differences among clusters. Each cluster has a distinct composition based on diagnosis type or body part type.
+```
+
+# Problem 4 (25 points)
+
+## K-means clustering
+
+Next, we'll cluster products using k-means clustering. For this problem, we'll use average age and number of injuries for each product as our axis variables. 
+
+### 4.1 (3 points)
+
+Create a summary table from the `neiss_subset` table that you used in Problem 2 and 3. Each row should be a product code, with a column of counts of injuries and a column of average ages for each product. Save the table as a variable called `products`.
+
+```{r}
+products <- neiss_subset %>%
+  group_by(Product_code) %>%
+  summarise(
+    Counts = n(),
+    Age_avg = mean(Age, na.rm = TRUE)
+  )
+```
+
+### 4.2 (2 points)
+
+Make a scatter plot of the products, with average age on the x axis and total injury count for the product on the y axis. (You do not need to label the points with the names of the products.)
+
+```{r}
+ggplot(products, aes(x = Age_avg, y = Counts)) +
+  geom_point() +
+  labs(title = "Scatter plot of Products over Age and Injury Counts",
+       x = "Average Age",
+       y = "Total Injury Couns") +
+  theme_classic()
+```
+
+### 4.3 (2 points) 
+
+Scale both the average age and the counts such that both have a mean of 0 and a variance of 1 and save the new data as a variable called `products_scaled`. 
+
+```{r}
+products_scaled <- products %>%
+  mutate(
+    Age_avg_scaled = scale(Age_avg),
+    Counts_scaled = scale(Counts)
+  )
+```
+
+### 4.4 (4 points) 
+
+Apply k-means clustering with k=4 to `products_scaled`. Make a scatter plot with scaled average age on the x axis, scaled counts of injury on the y axis, and each point's k-means cluster as colors.
+
+**Remember to set the seed every time you run `kmeans` to ensure that your clustering is reproducible**
+
+```{r}
+set.seed(713)
+k = 4
+kclusters = kmeans(products_scaled, k)
+products_scaled$cluster <- as.factor(kclusters$cluster)
+ggplot(products_scaled, aes(x = Age_avg_scaled, y = Counts_scaled, color = cluster)) +
+  geom_point() +
+  labs(title = "K-means Clustering (k=4) of Products over Age and Injury Counts",
+       x = "Scaled Average Age",
+       y = "Scaled Injury Counts",
+       color = "Cluster ID") +
+  theme_classic()
+```
+
+### 4.5 (4 points) 
+
+Now, we need to choose the optimal value for k. In class, we introduced a metric called within-cluster sum of squares (WSS) to compare clusterings. 
+
+Make a function that takes two inputs: the **scaled data** matrix and the desired number of clusters **k**. Your function should then run k-means clustering on the input scaled data matrix using the input k and return the WSS. 
+
+```{r}
+wss_function <- function(scaled_data, k) {
+    set.seed(713)
+    kcluster_result <- kmeans(scaled_data, k)
+    return(kcluster_result$tot.withinss)
+}
+```
+
+### 4.6 (3 points) 
+
+Use an apply-family function to iterate over the values of k within the range **2** to **50** and run the function you made on `products_scaled`. Create a data frame called `wss_df` where the one column contains the values of k that you tested and another column contains the corresponding WSS values.
+
+```{r}
+set.seed(713)
+k_values <- 2:50
+wss_values <- sapply(k_values, function(k) wss_function(products_scaled, k))
+wss_df <- data.frame(k = k_values, wss = wss_values)
+```
+
+### 4.7 (3 points) 
+
+Plot your results from 4.4 in an elbow plot: k on the x-axis and WSS on the y axis. Identify the elbow point in the plot. What is an ideal value of k for optimal clustering? (note: you may not see consistently decreasing values due to some randomness in each iteration of the function. Look for an overall trend that resembles an elbow.)
+
+```{r}
+# Add your code below
+ggplot(wss_df, aes(x = k, y = wss)) +
+    geom_line() +
+    geom_point() +
+    labs(title = "Elbow Plot",
+         x = "Number of clusters (k)",
+         y = "Total within-cluster sum of squares") +
+    theme_classic()
+```
+
+```{txt}
+# What is an ideal value of k for optimal clustering?
+# Write your answer below
+The ideal value of k for optimal clustering is 8.
+The elbow point is where we observe the decrease of wss siginificantly slows down, meaning more clusters from this point, more than 8 clusters would not give additional information and would not be better fit for the model. 
+```
+
+### 4.8 (4 points) 
+
+Plot four faceted scatter plots similar to what you made in 4.4 (scaled injury count on the y axis, scaled mean age on the x axis), except each facet should have the points colored by the clusters at a different k. You can choose any four values of k, but make sure that one of them is the optimal k you identified in 4.6. The title of each facet should make it clear what the k was for that clustering.
+
+```{r}
+set.seed(713)
+k5 <- kmeans(products_scaled, 5)
+k10 <- kmeans(products_scaled, 10)
+k20 <- kmeans(products_scaled, 20)
+k8 <- kmeans(products_scaled, 8)
+
+plot1 <- ggplot(products_scaled, aes(x = Age_avg_scaled,
+                        y = Counts_scaled, 
+                        color = as.factor(k5$cluster))) +
+         geom_point() +
+         labs(title = 
+                "K-means (k=5) clustering of Products over Age and Injury Counts",
+              x = "Scaled Average Age",
+              y = "Scaled Injury Count",
+              color = "Cluster") +
+        theme_classic() +
+        theme(legend.text = element_text(size = 8),
+              legend.title = element_text(size = 8))
+
+
+plot2 <- ggplot(products_scaled, aes(x = Age_avg_scaled,
+                        y = Counts_scaled, 
+                        color = as.factor(k10$cluster))) +
+         geom_point() +
+         labs(title = 
+                "K-means (k=10) clustering of Products over Age and Injury Counts",
+              x = "Scaled Average Age",
+              y = "Scaled Injury Count",
+              color = "Cluster") +
+        theme_classic() +
+        theme(legend.text = element_text(size = 8),
+              legend.title = element_text(size = 8))
+
+
+plot3 <- ggplot(products_scaled, aes(x = Age_avg_scaled,
+                        y = Counts_scaled, 
+                        color = as.factor(k20$cluster))) +
+         geom_point() +
+         labs(title = 
+                "K-means (k=20) clustering of Products over Age and Injury Counts",
+              x = "Scaled Average Age",
+              y = "Scaled Injury Count",
+              color = "Cluster") +
+        theme_classic() +
+        theme(legend.text = element_text(size = 8),
+              legend.title = element_text(size = 8))
+
+
+plot4 <- ggplot(products_scaled, aes(x = Age_avg_scaled,
+                        y = Counts_scaled, 
+                        color = as.factor(k8$cluster))) +
+         geom_point() +
+         labs(title = 
+                "K-means (k=8) clustering of Products over Age and Injury Counts",
+              x = "Scaled Average Age",
+              y = "Scaled Injury Count",
+              color = "Cluster") +
+         theme_classic() +
+         theme(legend.text = element_text(size = 8),
+              legend.title = element_text(size = 8))
+
+combined_plot <- plot_grid(plot1, plot2, plot3, plot4, ncol = 2)
+print(combined_plot)
+```
+
+## Don't Forget to Commit
+
+Please remember to submit your assignment by adding all relevant files to the staging area (in this case the R Markdown file and corresponding knitted PDF) and then committing and pushing them to GitHub classroom.
+
+## Be courteous with knitting
+
+As a final reminder, please be aware of the length of your knitted HTML or PDF file. If you have used code to print or examine something with a very long output, that should not be included in your knitted HTML or PDF. Please double check that there are no overly long print-outs in your HTML or PDF before submitting.

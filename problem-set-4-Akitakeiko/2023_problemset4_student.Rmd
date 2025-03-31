@@ -1,0 +1,343 @@
+---
+title: 'BMI 713 Problem Set #4, Fall 2023 (80 points total)'
+author: "Cheryl Gu"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+## Learning Objectives
+
+After attending lecture and upon completion of this problem set you should be more familiar with HPC and O2.
+
+## Instructions
+
+You will be submitting this assignment via GitHub Classroom. Your submission will be recorded when you push a commit to the repository on GitHub Classroom (instructions below), and you can make as many commits as you want before the deadline. We will grade assignments based on the latest commit.
+This home work requires a lot of interactions with terminal and the online O2 portal. Make sure you follow the detailed instructions for each question, and include all necessary information for this assignment in this RMD file. 
+
+### How to commit code to GitHub
+
+1.  Open either GitHub Desktop or a command line terminal and navigate to the repository that contains this assignment (via the GUI or cd command)
+2.  Add the new or modified files to the staging area by either checking the box next to the files or using the command "git add \<filename(s)\>"
+3.  Commit the changes. You are required to include a commit message. This is found in the small text box near the commit button on GitHub Desktop or using the command "git commit -m 'commit message goes here'"
+4.  Push your changes and files to the remote repository. This is done by pressing the push to origin button on GitHub Classroom or with the command "git push"
+
+### What to Submit
+
+You will need to submit **two pairs of** R Markdown files and knitted HTMLs or PDFs for this assignment (four files total). When you finish each R Markdown file in this assignment, make sure to press the arrow next to the "Knit" button near the top panel of RStudio and select the option to knit to HTML or PDF. Make sure the new HTML or PDF appears in your repository and then follow the steps to commit to GitHub Classroom. If you are having trouble knitting with the `{txt}` chunks, you can remove those chunks and type your answers outside of the chunks with clear labels.
+
+
+## Special Instructions
+In this assignment, you will use O2 to complete a series of coding tasks. If you need any pointers on how to log into and use O2, how to access/move files, how to use SLURM/O2Portal, etc., please see the Harvard Research Computing O2 wiki: https://harvardmed.atlassian.net/wiki/spaces/O2/overview. Most of the answers you need will be here. Please use this resource **first**, then reach out to the course staff with your questions via office hours, Canvas discussion, or email. **Please contact the course staff and not HMS IT!** If there's an issue that we can't solve, we will direct you to reach out to HMS IT. However, we don't want to overburden them with course-specific issues that we can debug ourselves.
+
+Also, **please be careful about the resources you request on O2**. As Meeta and Will mentioned, if you repeatedly request lots of resources (and especially if you don't use them), you will lose priority in the SLURM system and it will be even harder for you to submit jobs — which will keep you from completing this problem set.
+
+
+## Problem 1: Getting set up (14 points)
+
+For this question, we will analyze some NEISS data on O2 via the command line.
+
+##### 1.1 (1 point) 
+
+First, ssh into O2. What is the name of the node/server you are on?
+
+```{txt}
+login01
+```
+
+##### 1.2 (3 points) 
+
+Start an interactive job, requesting 5 hours of runtime and 500 megabytes of memory. Make sure you specify the class SLURM account if needed. Copy and paste the command that you use for this below:
+
+```{txt}
+srun --pty -p interactive -t 0-5:00 --mem 500M --account=class_hms_bmi701  bash
+```
+
+##### 1.3 (2 points) 
+
+What node are you on now? What is one difference between the node you're on now (in 1.3) and the one you were on in 1.1?
+
+```{txt}
+compute-a-16-162
+The major difference is that compute node here, can handle intensive processes while the login node in 1.1 cannot.
+```
+
+##### 1.4 (2 points)  
+
+For the rest of Problem 1, you will carry out each task on O2 and copy and paste the relevant code into the provided text chunks.
+You have decided that you would like to use an older version of R available on O2 (R 4.2.1). Load this module along with any other modules it might require. Copy and paste the command(s) that you use for this below:
+
+```{txt}
+module load gcc/9.2.0 R/4.2.1
+```
+
+##### 1.5 (3 points)  
+
+Start a command-line R session (i.e., opening R on the command line rather than through a graphical user interface like RStudio). Create a directory within your home directory to store your personal R library. Copy and paste the command line code you used in the first chunk below. For each line of code, write an one-sentence explanation on this line's meaning. (If you already did these steps prior to the problem set, you should still write the lines of code that you would use below.)
+
+Use this personal library to install and load the `dplyr`, `tidyr`, `lubridate`, and `ggplot2` packages. (You will select a CRAN mirror when installing the first package). This process will take some time. Copy and paste the R code you used in the second chunk below. 
+
+```{txt}
+## Command line code
+mkdir -p ~/R/4.2.1/library
+# create a folder/directory for personal R library installing packages.
+export R_LIBS_USER="~/R/4.2.1/library"
+# modify the environment to redirect all installations to this directory that we created for personal R library.
+echo $R_LIBS_USER
+# check the contents of the environment variable R_LIBS_USER to ensure last step worked
+```
+
+```{txt}
+## R code
+.libPaths()
+# select CRAN mirror 73: USA (OR
+install.packages(c("dplyr","tidyr", "lubridate", "ggplot2"))
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(ggplot2)
+```
+
+##### 1.6 (3 points)  
+
+We have provided a file called `neiss_sample_PS4.csv` on O2. It is stored at the following path: /n/groups/training/bmi713/neiss_sample_PS4.csv. You can read this file, but you cannot edit or write in this directory (only course staff have access to do so)
+
+Read the `neiss_sample_PS4.csv` file into your command-line R session and save it as a variable called `neiss_sample`. Use relevant `tidyverse` functions to drop the NA values in the `Age`, `Treatment_Date`, `Body_Part` columns. Save the updated data frame to a CSV file called `neiss_cleaned.csv` in your working directory (either your personal home or scratch directory.) Make sure that you know where is your working directory and where the .csv file is stored. If you want to use a function that is not in the packages you installed in 1.5, you can install the necessary package(s) now.
+
+Copy and paste all the code you ran in your R session to accomplish this into the text chunk below.
+
+```{txt}
+## R code
+neiss_sample <- read.csv("/n/groups/training/bmi713/neiss_sample_PS4.csv")
+neiss_sample_cleaned <- drop_na(neiss_sample, c("Age", "Treatment_Date", "Body_Part"))
+write.csv(neiss_sample_cleaned, "neiss_cleaned.csv")
+```
+
+
+## Problem 2: Interactive clustering analysis on O2portal (24 points)
+
+For this question, you will use RStudio through the online O2portal to conduct clustering analysis and visualize the cleaned data. 
+
+Go to the O2portal website (https://o2portal.rc.hms.harvard.edu/pun/sys/dashboard) and launch an RStudio session. Choose the priority partition, 1 core, 5 hours of runtime, and 1 GB of memory. Make sure you load the necessary modules to run R in the "Modules to be loaded" section. **Check the "Make /n/groups available" box.**
+
+Once your RStudio session launches, copy the R markdown file from /n/groups/training/bmi713/2023_problemset4_Q2.Rmd to your working directory. (You can do this from the terminal in the RStudio session, or clicking File -> Open file and then type in the path, or from a separate Terminal/GitBash session on your local computer.) Go through the rest of Problem 2 in the R Markdown file on O2portal.
+
+Once you complete Problem 2, knit your Rmd file to an HTML on O2 and then copy the Rmd an HTML files to your Problem Set #4 repository folder on your local computer. You will include these in the submission that you commit and push to GitHub Classroom.
+
+
+## Problem 3: Submitting jobs to test clustering parameters (25 points)
+
+In real world-applications, we often need to test many different hyperparameters before we determine the optimal clustering strategy for a dataset. High-performance computing makes it easier to run hyperparameter searches without having to run time-consuming code on your own computer. 
+
+##### 3.1 (10 points)
+
+We want to run k-means clustering (as we did in Problem 2) on the scaled data, but now we want to find the optimal value of k using an R script. 
+
+Remember: R scripts are files that just contain code and end with a .R extension. They are not R Markdown files. Write an R script that helps us do this by carrying out the following steps:
+
+  - This R script should not take any inputs when it is run from the command line
+  - Within the script, it should read the `neiss_scaled.csv` file that you saved in 2.4. (Hint: Use O2portal or the ls command to find the relative/absolute path of `neiss_scaled.csv`.)
+  - The script should run k-means clustering on this dataset for values of k ranging from 2 through 20. Use an apply-family function to iterate over the values of k. For each value of k, you should run k-means clustering 10 times, setting the random seed to a new value each time.
+  - We have provided the function from class to calculate average silhouette score for a clustering. Store the average silhouette score from each of the trials in a single data frame. This data frame should have three columns: k (ranging from 2-20), iteration (ranging from 1-10), and average silhouette score for that trial.
+  - Save the data frame as CSV file called `kmeans_sil_results.csv` in your working directory for future analysis.
+
+```{txt}
+avg_silhouette_score <- function(clusters, dist_mat) {
+  ss <- silhouette(clusters, dist_mat)
+  mean(ss[,3])
+}
+```
+
+Save the script as a file called `kmeans_testing.R`. You can either write this script directly on O2, or you can write it on your local computer (in RStudio, or in a different code/text editor) and then copy the R script to your home directory on O2. 
+For file transfer between O2 and local machine, refer to the guidance in the `BMI713_copyFiles.pdf` on Canvas (https://canvas.harvard.edu/courses/125814/files/folder/Week%205?preview=18410800) or the O2 Wiki about file transfer (https://harvardmed.atlassian.net/wiki/spaces/O2/pages/1588662157/File+Transfer).  
+
+Once you've written the script, copy and paste the entire script in the following chunk.
+
+```{txt}
+### find the optimal value of k 
+
+library(cluster)
+
+neiss_scaled <- read.csv("~/neiss_scaled.csv")
+
+# Calculate the distance matrix
+dist_mat <- dist(neiss_scaled)
+
+# Calculate average silhouette score
+avg_silhouette_score <- function(clusters, dist_mat) {
+  ss <- silhouette(clusters, dist_mat)
+  mean(ss[,3])
+}
+
+# Run k-means clustering for k=2:20, iterations=1:10
+temp <- lapply(2:20, function(k) {
+  lapply(1:10, function(iteration) {
+    set.seed(713)
+    kmeans_result <- kmeans(neiss_scaled, centers = k)
+    avg_silhouette <- avg_silhouette_score(kmeans_result$cluster, dist_mat)
+    return(data.frame(k = k, iteration = iteration, silhouette_avg = avg_silhouette))
+  })
+})
+
+# combine the results
+results <- do.call(rbind, do.call(rbind, temp))
+
+# Save results to a CSV file
+write.csv(results, "kmeans_sil_results.csv", row.names = FALSE)
+```
+
+##### 3.2 (6 points)
+
+Write an sbatch file to submit the job. Here are some things to consider in writing the directives:
+
+  - This should be pretty fast, so choose a partition designed for fast jobs that will allow the job to get dispatched more quickly. We expect it to take < 10 minutes to run.
+  - The script won't take many resources to run, so request 250 MB of memory.
+  - None of the processes in the script are multithreaded
+  - Make sure you specify the class SLURM account if needed.
+  - Set an informative job name
+  - Specify paths for the error and output files.
+  
+Within the sbatch file, write code to run the `kmeans_testing.R` script. (Remember to specify that path to your personal R library and load any necessary modules beforehand.)
+
+Again, you can either write this sbatch file on your local computer and then upload it to your home directory on O2, or you can write it directly on O2. Copy and paste all the contents of your sbatch file in the following chunk.
+
+```{txt}
+#!/bin/bash
+#SBATCH -p short
+#SBATCH -t 0-10:00
+#SBATCH -c 1
+#SBATCH --mem=250
+#SBATCH -o %j.out
+#SBATCH -e %j.err
+#SBATCH -J Rscript_sqrt
+#SBATCH --account=class_hms_bmi701
+
+# Load necessary modules
+module load gcc/9.2.0
+module load R/4.2.1
+
+# Set the personal R library path
+export R_LIBS_USER=~/R/4.2.1/library
+
+# Run the R script
+Rscript ~/kmeans_testing.R
+```
+
+##### 3.3 (2 points)  
+
+Use the sbatch file to submit your R script. **Make sure your R script works before submitting it to SLURM! You may want to test individual pieces on a few test inputs first.** 
+Once it finishes running, it should have generated a file called `kmeans_sil_results.csv`. Count the number of rows in this file with the command "wc -l kmeans_sil_results.csv". How many rows are in this file? Explain why this does or doesn't match what you'd expect.
+
+```{txt}
+191 rows. We should expect to observe 190 observations. This matches my expectation since the header row is counted into the total lines of rows as well.
+```
+
+##### 3.4 (4 points) 
+
+Copy this file from O2 to your local computer and read it into RStudio as a variable called `kmeans_sil_results` in the code chunk below (see problem 3.1 for instructions to copy files between your computer and O2). 
+Then, plot the results from `kmeans_sil_results` in an elbow plot: k on the x-axis and average silhouette scores on the y axis. (You will see multiple points per value of k because of the multiple iterations.) Make sure your plot has an informative title, axis titles, and all text is legible.
+
+```{r}
+library(ggplot2)
+
+kmeans_sil_results <- read.csv("~/Desktop/kmeans_sil_results.csv")
+
+ggplot(kmeans_sil_results, aes(x = k, y = silhouette_avg)) +
+  geom_point() +
+  geom_line(aes(group = iteration)) +
+  labs(
+    title = "Elbow Plot for K-means Clustering",
+    x = "Number of Clusters (k)",
+    y = "Average Silhouette Score"
+  ) +
+  theme_classic()
+```
+
+##### 3.5 (3 points)
+
+What seems to be a good choice of k for these data? Why? (Your explanation should be specific about the rationale behind choosing this point: why wouldn't we want a bigger k? why wouldn't we want a smaller k?)
+
+```{txt}
+Based on the elbow plot we plotted, we observe that k=7 would fit best for the data. The average silhouette approach determines how well each object lies within its cluster, so the optimal number of clusters k is the one that maximizes the average silhouette over a range of possible values for k. (cite:https://uc-r.github.io/kmeans_clustering)
+A smaller value of k may not be enough to capture the entire structure information in the data, while a larger value may lead to over overfitting the data and creating artifical sub-clusters.
+Therefore, we choose the optimal value of k right at the elbow of the plot, which is k=7.
+```
+
+
+## Problem 4: High-Performance Computing concepts (17 points)
+
+##### 4.1 (4 points)
+
+Based on your experience (either from lecture, problem set, or elsewhere), what are two advantages and two disadvantages of using High-Performance Computing? (one sentence each)
+
+```{txt}
+Pros:
+  1. HPC has a greater storage place compared to the local computer.
+  2. HPC is designed for a enhanced or more powerful computational analysis that can deal with large datasets using more memory.
+  
+Cons:
+  1. If multiper users are requesting to use the cluster at the same time, the waiting time for initiating a job queue or interactive session for single user takes longer than expected.
+  2. We need to load the required environment modules in order to use software, but we may forget to load the dependencies and run into errors.
+```
+
+##### 4.2 (2 points)
+
+Describe an analysis of NEISS data where we would prefer to use High-Performance Computing (instead of our local computers) and briefly justify why.
+
+```{txt}
+We may want to use HPC performing k means clustering analysis on NEISS data. Especially for the dataset "neiss_2008_2018", we have 4190117 observations with 25 variables. If we want to train the k-means model with 100 iterations, it is very computationally expensive and it may hit the memory constraints with the local computer.
+```
+
+##### 4.3 (2 points)
+
+Describe an analysis of NEISS data where we would prefer to use our local computers (instead of High-Performance Computing) and briefly justify why.
+
+```{txt}
+If we just want to do data visualization with fewer observations, such as plotting the scatter plot of body_counts vs. products. It would be enough to just run in on our local computers since it does not require large memory to perform this analysis, and R running locally is easier as well.
+```
+
+##### 4.4 (4 points)
+
+Your friend want to run a script on O2 that they know, from past experience, will take 2 days to run and use 3 GB of memory. They submit the script using sbatch, requesting the short partition and 50 GB of memory just to be safe. Their job is pending for a few hours, so they also submit it to the priority partition. Their plan is to wait and see which partition starts the job first, and then cancel the pending job on the other partition. List two mistakes that your friend made and briefly explain how you would fix them.
+
+```{txt}
+1. This friend knows that this scrpit would approximately take 2 days to run, however, he chose to use "short" partition, which has the max runtime of only 12 hours.
+
+SOLUTION: He should probably resubmit a job with a "medium" partition.
+
+2. He also request too much memory, he only needs 3 GB to run but he request for 50 GB. This over-requesting is the main reason his requesting time takes a few hours.
+
+SOLUTION: When resubmitting the job, also modify the memory to 4GB or 5GB if want to be safe but also not too much.
+
+```
+
+##### 4.5 (5 points)
+
+Imagine you have a large NEISS dataset with millions of injuries and 300 variables that you want to cluster. You want to test each value of k between 2-20 to find the one that optimizes within-cluster sum of squares. Given the size of the problem, you want to use O2 to conduct the analysis, and your friend tells you that there is a multi-core implementation of k-means clustering that you can use.
+
+Describe one way that you could efficiently use high-performance computing to conduct this analysis that takes advantage of both multithreading and parallelization? (Be specific about which part of your solution is multithreading and which part is parallelization.) Approximately how many times faster do you expect this approach to be, compared to running the entire analysis on one core of one node? Assume that you can use as many nodes as you want, and that each node has 8 cores.
+
+```{txt}
+We perform this analysis on the Rstudio Interactive clustering analysis on O2portal from HPC cluster, which can use both multithreading and parallelization effectively.
+
+- Multithreading (using multiple cores within each node)
+The each round of iterations of the k-means algorithm is going to be splitted among the 8 cores on each node. If the work for each k-value is divided evenly among 8 cores, we expect to get a speed-up factor of 8.
+
+- Parallelization (using multiple nodes)
+Since we want to test the values for k from 2 to 20, which gives us 19 distinct k-values in total. We assign each k-value to a different node, so that we can have a  maximum speedup factor of 19.
+
+Overall, we will use 19 nodes with 8 cores in each node, so that:
+  19*8 = 152
+
+We expect that this entire analysis would be 152 times faster compared to running it on one core of a single node. 
+```
+
+
+## Don't Forget to Commit
+
+Please remember to submit your assignment by adding all relevant files to the staging area (in this case the two R Markdown files and two corresponding knitted HTMLs or PDFs) and then committing and pushing them to GitHub Classroom.
+
+## Be courteous with knitting
+
+As a final reminder, please be aware of the length of your knitted HTML or PDF file. If you have used code to print or examine something with a very long output, that should not be included in your knitted HTML or PDF. Please double check that there are no overly long print-outs in your HTML or PDF before submitting.

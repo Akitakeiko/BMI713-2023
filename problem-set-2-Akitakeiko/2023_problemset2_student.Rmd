@@ -1,0 +1,544 @@
+---
+title: 'BMI 713 Problem Set #2, Fall 2023 (80 points total)'
+author: "Cheryl Gu"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+## Learning Objectives
+
+After attending lecture and upon completion of this problem set you should be able to do the following:
+
+### From Lesson 5 (Tuesday, 9/19)
+
+-   Define a grammar and describe why we use visualization grammars
+-   Dissect a plot according to Wickham's visualization grammar
+-   Use ggplot2 to construct plots
+-   Use ggplot2 to modify and customize plots
+
+### From Lesson 6 (Thursday, 9/21)
+
+-   Recognize applications of text/natural language processing
+-   Use base R or stringr functions to do basic string manipulation
+-   Use stringr functions to handle whitespace
+-   Construct basic regular expressions for string matching
+-   Use regex to filter data frames or replace patterns
+
+
+## Instructions
+
+You will be submitting this assignment via GitHub Classroom. Your submission will be recorded when you push a commit to the repository on GitHub Classroom (instructions below), and you can make as many commits as you want before the deadline. We will grade assignments based on the latest commit.
+
+### How to commit code to GitHub
+
+1.  Open either GitHub Desktop or a command line terminal and navigate to the repository that contains this assignment (via the GUI or cd command)
+2.  Add the new or modified files to the staging area by either checking the box next to the files or using the command "git add \<filename(s)\>"
+3.  Commit the changes. You are required to include a commit message. This is found in the small text box near the commit button on GitHub Desktop or using the command "git commit -m 'commit message goes here'"
+4.  Push your changes and files to the remote repository. This is done by pressing the push to origin button on GitHub Classroom or with the command "git push"
+
+### What to Submit
+
+You will need to submit **both** an R Markdown file and a knitted HTML or PDF for this assignment. When you finish the assignment, make sure to press the arrow next to the "Knit" button near the top panel of RStudio and select the option to knit to HTML or PDF. Make sure the new HTML or PDF appears in your repository and then follow the steps to commit to GitHub classroom. If you are having trouble knitting with the `{txt}` chunks, you can remove those chunks and type your answers outside of the chunks with clear labels.
+
+## Load all your libraries here
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Add code to load all your libraries here
+library(bmi713neiss)
+library(ggplot2)
+library(tidyverse)
+library(tidyr)
+library(viridis)
+library(lubridate)
+library(dplyr)
+library(stringr)
+library(patchwork)
+```
+
+#### BEFORE YOU BEGIN: Run the following code to prevent errors in string processing due to misformatted characters
+```{r setup2, include=FALSE}
+neiss_2013_2018$Narrative_1 <- iconv(neiss_2013_2018$Narrative_1, to = "UTF-8", sub = "byte")
+neiss_2013_2018$Product_1 <- iconv(neiss_2013_2018$Product_1, to = "UTF-8", sub = "byte")
+```
+
+
+## **Problem 1** (14 pts)
+Run the code in the chunk below to generate a plot. This graphic was generated in base R using a publicly available [cancer dataset]("https://corgis-edu.github.io/corgis/datasets/csv/cancer/cancer.csv"). Use the code provided below as a reference when answering questions about the data. 
+
+```{r q1.cancer_plot, include = TRUE, out.width = '60%'}
+
+# Load cancer data into environment
+cancer_rates <- read.csv("https://corgis-edu.github.io/corgis/datasets/csv/cancer/cancer.csv", sep = ",", header = TRUE)
+
+# Parse column names for data of interest; ras = (Rates, Age, and Sex)
+ras_data <- cancer_rates[, grepl("Rates.Age.and.Sex", colnames(cancer_rates), ignore.case = TRUE)]
+
+# Period "." characters are read as non-regex characters by adding escapes (i.e. \\. == ".")
+colnames(ras_data) <- sub("\\.\\.\\.", "-", colnames(ras_data)) 
+colnames(ras_data) <- sub("\\.", "_", sapply(strsplit(colnames(ras_data), "Sex.?"), `[`, 2))
+labels <- colnames(ras_data)
+
+# Extract columns of interest and reformat
+rownames(ras_data) <- cancer_rates$State
+ras_data <- as.data.frame(cbind(labels, t(ras_data)))
+w_ras_data <- ras_data %>% tidyr::separate(., col = labels, into = c("Age_Group", "Sex"), sep = "_")
+l_ras_data <- w_ras_data %>% pivot_longer(., cols = !c("Age_Group", "Sex"), names_to = "States") %>%
+  mutate(Age_Group = case_when(
+    Age_Group == "18" ~ "<18",
+    Age_Group == "64" ~ ">64",
+    TRUE ~ Age_Group
+  )) %>%
+  mutate(Age_Group = factor(Age_Group, levels = c("<18", "18-45", "45-64", ">64")))
+l_ras_data$value <- as.numeric(l_ras_data$value)
+
+# Plot data in strip plot
+stripchart(value ~ Age_Group, data = l_ras_data, 
+           pch = 19, frame = TRUE, vertical = FALSE, 
+           col = hcl.colors(length(unique(l_ras_data$Age_Group))), # the 4 colors are "#4B0055" "#007094" "#00BE7D" "#FDE333
+           method = "jitter", xlab = "Incidence Rate", ylab = "Age_Group", main = "Age_Group Differences in U.S. Cancer Rates")
+legend(x=1200,y=3,c("18", "18-45", "45-64", "64"),cex=.8,col=c("#4B0055", "#007094", "#00BE7D", "#FDE333"),pch=16)
+```
+
+
+##### **1.1** (2 points)  
+Write a 1-2 sentence description of the graph produced above. Specify what data are being displayed in the graph and how they are presented.
+
+```{txt}
+The distribution of the cancer incident rates among different age groups in the U.S is displayed in a stripchart. Specifically, age is divided into 4 distinct groups, 18, 18-45, 45-64 and 64, each group has a distinct color respectively. Individual data points represented as different colored circle data points based on the age group. Based on this distribution plot, we observe that individuals in age 64 group, as being the group with most people, has the highest cancer incidents rate as well.
+```
+
+##### **1.2** (2 points)   
+Identify one geometry and one aesthetic of the graph produced above. Describe each geometry or aesthetic in one sentence that describes what aspect of the data the geometry or aesthetic conveys.
+
+```{txt}
+The stripchart geometry is used for effectively displaying each individual data points, and it helps showing the relative distribution of each point, with a sense of respresenting the entire dataset with all the other data points within different age groups. The color aesthetic is applied for distingushing the differences among distinct age groups, as it is more catchy visually, it would become easier to segregate or compare the distribution of incidence rates among these groups.
+```
+
+##### **1.3** (6 points)  
+Reproduce the above figure using the ggplot2 library (ggplot2 must be used for full credit). Use the `l_ras_data` variable (generated in example code) as the input data. Make sure your figure has the following features:
+
+  - points positioned and colored based on the input data (Hint: Use the `geom_point` function and set `position=position_jitter(0.5)` to get a similar effect as shown in the original plot.)
+  - colors used in the plot above (Hint: their hex codes are "#4B0055" "#007094" "#00BE7D" "#FDE333")
+  - a descriptive title
+  - x and y axis labels
+  - white background and no gridlines
+  - a legend on the right (either on top of the plot or next to it)
+  
+Your graph may not look exactly the same as the original plot - that's ok! Just make sure that the key components listed above are the same/as similar as possible. 
+  
+Assign the resulting plot to a variable named `pgg`.  Display `pgg` below. 
+
+```{r q1.3, include = TRUE, warning = FALSE, out.width = '60%'}
+pgg <- l_ras_data %>%
+          ggplot(aes(x = value, y = Age_Group, color = Age_Group)) +
+          geom_point(position = position_jitter(width = 0.5), 
+                     size = 3) +
+          scale_color_manual(values = c("#4B0055",
+                                        "#007094", 
+                                        "#00BE7D", 
+                                        "#FDE333")) +
+          labs(title = "Age_Group Differences in U.S. Cancer Rates",
+               x = "Incidence Rate",
+               y = "Age_Group") +
+          theme_bw() + 
+          theme(legend.position = "right",
+                panel.grid.major = element_blank(), 
+                panel.grid.minor = element_blank(),
+                panel.background = element_blank(), 
+                panel.border = element_blank(),
+                axis.line = element_line(colour = "black"))
+
+# cite for removing grid and background: https://felixfan.github.io/ggplot2-remove-grid-background-margin/
+pgg
+```
+
+##### **1.4** (2 points) 
+Then, use the `theme()` function to change 3 (or more) properties (i.e. background color, font family, etc.) of `pgg`. Refer to the [ggplot2 documentation](https://ggplot2.tidyverse.org/reference/theme.html) to get a full list of theme options.
+
+```{r q1.4, include = TRUE, warning = FALSE}
+pgg2 <- l_ras_data %>%
+          ggplot(aes(x = value, y = Age_Group, color = Age_Group)) +
+          geom_point(position = position_jitter(width = 0.5), 
+                     size = 3) +
+          scale_color_manual(values = c("#4B0055",
+                                        "#007094", 
+                                        "#00BE7D", 
+                                        "#FDE333")) +
+          labs(title = "Age_Group Differences in U.S. Cancer Rates",
+               x = "Incidence Rate",
+               y = "Age_Group") +
+          theme_bw() +
+          theme(panel.grid.major = element_blank(), 
+                panel.grid.minor = element_blank(),
+                panel.background = element_blank(), 
+                panel.border = element_blank(),
+                axis.line = element_line(colour = "black"),
+                axis.text = element_text(colour = "blue"),
+                text = element_text(family = "Times", size = 12),
+                legend.justification = c("right", "top"),
+                legend.box.just = "right",
+                axis.ticks = element_line(linewidth = 2))
+
+pgg2
+```
+
+##### **1.5** (2 points) 
+In many cases, you will need to save your plots as high-quality images or as specific image formats (e.g., for publications). One way to do this is with the `ggsave` function. 
+
+Use `ggsave` to save your plot from 1.4 as a jpg file with resolution of 100 dpi. The image's width should be 10 inches, and you can set the height to an appropriate value that ensures your image does not become distorted. Save the figure as a jpg file named "q1.5_final_graphic.jpg" in your Problem Set #2 git repository.
+
+```{r q1.5, echo = TRUE, out.width = '60%', out.height='100%'}
+ggsave(
+  "q1.5_final_graphic.jpg", 
+  plot = pgg2, 
+  device = "jpeg",
+  width = 10, 
+  height = 8,  
+  dpi = 100
+)
+```
+
+
+## **Problem 2** (15 pts)
+In this problem, we will practice some of techniques we have learned for wrangling and visualizing data to analyze injuries relating to falling. Imagine the U.S. Consumer Product Safety Commission ([CPSC](https://www.cpsc.gov/Recalls)) wants to release a notice about safety issues with scooters, but they want more information about who is at risk and when. They ask us to use NEISS to study falling injuries involving scooters. 
+
+##### **2.1** (4 pts) 
+Filter `neiss_2013_2018` to the relevant injuries by using a regular expression to filter for "fall" *or* "fell" in the "Narrative_1" column. Save the filtered data frame to `fall_injuries`. How many unique cases (`CPSC_Case_Number`) do you have for falls?
+
+```{r code_2.1}
+fall_injuries <- neiss_2013_2018 %>% 
+  filter(grepl("fall|fell", Narrative_1, ignore.case = TRUE))
+
+unique_cases_fall <- length(unique(fall_injuries$CPSC_Case_Number))
+
+print(unique_cases_fall)
+```
+
+```{txt}
+There are 888313 unique cases in CPSC_Case_Number we observed for falls.
+```
+
+##### **2.2** (4 pts) 
+
+We are interested in the differences in the occurrence of fall-related injuries between sexes in each age group. Before plotting these data, tidy up your `fall_injuries` data frame by removing the "UNKNOWN" values in "Sex" and NA values in "Age_Group". 
+
+```{r q2.2}
+fall_injuries <- fall_injuries %>%
+  filter(Sex != "UNKNOWN") %>%
+  drop_na(Age_Group)
+```
+
+##### **2.3** (7 pts) 
+
+Then, make a plot using 'ggplot2' that visualizes the differences in the numbers of fall-related injuries between sexes in each age group. These instructions are vague on purpose - we want you to be able to think about an analysis question, choose a plot that effectively visualizes the relevant data, and actually write code to generate it.
+
+Save your plot to the variable `age_sex_plot` and then display the plot at the end of the code chunk. Include a descriptive title, axis labels, and a legend if needed.
+
+```{r q2.3}
+fall_injuries_count <- fall_injuries %>%
+  group_by(Age_Group, Sex) %>%
+  summarise(count = n())
+
+age_sex_plot <- fall_injuries_count %>%
+                  ggplot(aes(x = Age_Group,
+                             y = count, 
+                             fill = Sex)) + 
+                         geom_bar(stat = "identity") +
+                         labs(
+                           title = "Fall-Related Injuries by Sex and Age Group",
+                           x = "Age Group",
+                           y = "Number of Injuries") +
+                         theme_bw() +
+                         theme(legend.position = "right",
+                               panel.grid.major = element_blank(),
+                               panel.grid.minor = element_blank(),
+                               axis.text.x = element_text(
+                               angle = 45, hjust = 1)) +
+                         facet_wrap(~ Sex) +
+                         scale_color_brewer(palette="Paired")
+age_sex_plot
+```
+
+
+
+## Reminder: Make an intermediate commit!
+
+You're halfway through! Try committing your work to this point to GitHub Classroom. It's good to get into a habit of committing your work early and saving consistent checkpoints of your progress.
+
+
+## **Problem 3** (19 points)
+
+In this problem, we'll go one step further to focus on a specific type of fall injury: falls involving scooters.
+
+##### **3.1** (4 points)
+First, filter the `fall_injuries` table further so only fall injuries involving a "scooter" in the Narrative_1 column remain (regardless of case).
+
+How many observations (rows) do you find after filtering to scooter fall injuries? Report your answer below. Store the resulting table in a variable named `scooter_fall_injuries`.
+
+```{r q3.1, include = TRUE, warning = FALSE}
+scooter_fall_injuries <- fall_injuries %>%
+  filter(grepl("scooter", Narrative_1, ignore.case = TRUE))
+
+print(nrow(scooter_fall_injuries))
+```
+
+```{txt}
+We observe 8963 observations after filtering to scooter fall injuries.
+```
+
+
+##### **3.2** (4 points) 
+Using the appropriate `lubridate` function, determine the day of the week that each injury in `scooter_fall_cases` occurred. Save the name of the day of the week in a new column in `scooter_fall_cases` called `Day_Of_Week`.
+
+```{r q.3.2, include = TRUE, warning = FALSE, out.width = '60%'}
+scooter_fall_cases <- scooter_fall_injuries
+scooter_fall_cases$Day_Of_Week <- wday(scooter_fall_injuries$Treatment_Date,
+                                          label = T,
+                                          abbr = F)
+```
+
+
+##### **3.3** (4 points) 
+Add another column called `Day_Type` that specifies whether the injury occurred on a weekend (Saturday, Sunday) or weekday (Monday, Tuesday, Wednesday, Thursday, Friday).
+```{r q.3.3, include = TRUE, warning = FALSE, out.width = '60%'}
+scooter_fall_cases <- scooter_fall_cases %>%
+                            mutate(Day_Type = case_when(
+                                   Day_Of_Week %in% c(
+                                     "Saturday", "Sunday") ~ "Weekend",
+                                      TRUE ~ "Weekday"))
+```
+
+
+##### **3.4** (7 points) 
+Make a barplot of the number of injuries per day of the week with the following features:
+
+  - Barplot shows the number of injuries per day of the week
+  - Bar color should be different for weekend vs. weekday
+  - Plot should be faceted by month (Hint: there are two faceting functions in ggplot2. To make the plots easier to read, choose the function designed for faceting on one variable.)
+  
+Display the plot at the end of the code chunk. Include a descriptive title, axis labels and a legend if needed.
+
+```{r q.3.4, include = TRUE, warning = FALSE, out.width = '100%'}
+scooter_fall_cases$Month_name <- month(scooter_fall_cases$Month, 
+                                       label = T, 
+                                       abbr = F)
+weekday_injuries_plot <- scooter_fall_cases %>%
+  ggplot(aes(x = Day_Of_Week, fill = Day_Type)) +
+  geom_bar(show.legend = TRUE) +
+  labs(
+    title = "Number of Scooter Fall Injuries per Day of the Week",
+    x = "Day of the Week",
+    y = "Number of Injuries",
+    fill = "Day_Type"
+  ) +
+   theme_bw() +
+   theme(legend.position = "right",
+         panel.grid.major = element_blank(),
+         panel.grid.minor = element_blank(),
+         axis.text.x = element_text(angle = 45, hjust = 1)) +
+   facet_wrap(~ Month_name) +
+   scale_color_brewer(palette="Paired")
+weekday_injuries_plot
+```
+
+## **Problem 4** (32 points)
+After working with NEISS for some time, you realize that it would be helpful to have user-friendly tools to learn quick facts about injuries caused by products of interest. Ideally, these tools will provide some summary stats and representative plots without users having to write the code themselves. In this problem, we will build a prototype of one such tool.
+
+##### **4.1** (6 points)
+Add a column to the neiss_2013_2018 data that contains each injury’s month name and the two-digit abbreviation for the year. For example, an injury where Month = 8 and Year = 2014 should be “August ’14”. 
+Hint: Use lubridate to get the month name from the month number.
+
+```{r q.4.1, include = TRUE, warning = FALSE, out.width = '60%'}
+neiss_2013_2018 <- neiss_2013_2018 %>%
+  mutate(Month_name = month(Month, label = T, abbr = F),
+         Month_Year = paste(Month_name, " ’", substr(Year, 3, 4), sep = ""))
+```
+
+
+##### **4.2** (12 points)
+Write a function called `neiss_product_query` that has one argument: a product as a character string. The function should then:
+  - Subset the `neiss_2013_2018` data to injuries involving that product. To be comprehensive, include injuries that contain the input string (not case sensitive) in the Narrative_1 column or in the Product_1 column.
+  - Using the subsetted data, calculate the average age of injuries involving the product rounded to the nearest whole number.
+  - Using the subsetted data, calculate the most common month/year combination (as created in 4.1) for injuries involving the product.
+  - Print out the following sentence with the placeholders filled with the values calculated above: “Injuries caused by {insert name of product} were highest in {insert most common month/year} and injured people who were on average {insert average age} years old.”
+
+```{r q.4.2, include = TRUE, warning = FALSE, out.width = '60%'}
+neiss_product_query <- function(product) {
+  # subset data
+  product_injuries <- neiss_2013_2018 %>%
+    filter(str_detect(Narrative_1, regex(product, ignore_case = TRUE)) | 
+           str_detect(as.character(Product_1), regex(product, 
+                                                     ignore_case = TRUE)))
+  product_injuries <- product_injuries %>%
+  mutate(Age = as.numeric(Age))
+  # calculate average age
+  avg_age <- round(mean(product_injuries$Age), 0)
+  
+  # calculate the most common month/year combination
+  most_common_month_year <- product_injuries %>%
+    group_by(Month_Year) %>%
+    summarise(count = n()) %>%
+    pull(Month_Year)
+  
+  # Print out the result
+  cat("Injuries caused by", product, "were highest in", most_common_month_year, 
+      "and injured people who were on average", avg_age, "years old.\n")
+}
+```
+ 
+ 
+##### **4.3** (2 points)
+Test your `neiss_product_query` function with *two* test inputs of products that you are interested in.
+
+```{r q.4.3, include = TRUE, warning = FALSE, out.width = '60%'}
+neiss_product_query("scooter")
+neiss_product_query("batteries")
+```
+
+ 
+##### **4.4** (8 points)
+We also want to display some quick summary plots to visualize these trends. Modify your neiss_product_query function so that in addition to printing out the sentence, it also does the following:
+
+  - Using the subsetted data, plot a histogram for the distribution of ages of injuries involving the product.
+  - Using the subsetted data, plot a line chart showing the number of injuries over 12 months for each year (one line per year). Use `color` to make different colored lines for each year. 
+  - Make sure each plot has a descriptive title and axis labels and that all labels are legible.
+  - Display the plots
+
+```{r q.4.4, include = TRUE, warning = FALSE, out.width = '60%'}
+neiss_product_query <- function(product) {
+  # subset data
+  product_injuries <- neiss_2013_2018 %>%
+    filter(str_detect(Narrative_1, regex(product, ignore_case = TRUE)) | 
+           str_detect(as.character(Product_1), regex(product, 
+                                                     ignore_case = TRUE)))
+  product_injuries <- product_injuries %>%
+    mutate(Age = as.numeric(Age))
+  # calculate average age
+  avg_age <- round(mean(product_injuries$Age), 0)
+  
+  # calculate the most common month/year combination
+  most_common_month_year <- product_injuries %>%
+    group_by(Month_Year) %>%
+    summarise(count = n()) %>%
+    pull(Month_Year)
+  
+  # print out the result
+  cat("Injuries caused by", product, "were highest in", most_common_month_year, 
+      "and injured people who were on average", avg_age, "years old.\n")
+  
+  # plot a histogram for the distribution of ages of injuries involving the product
+  # cite for geom_histogram:http://www.sthda.com/english/wiki/ggplot2-histogram-plot-quick-start-guide-r-software-and-data-visualization
+  
+  hist_age_injuries <- product_injuries %>%
+    ggplot(aes(x=Age)) +
+    geom_histogram(color="darkblue", fill="lightblue",binwidth=1) +
+    labs(title = paste('Distribution of ages for', product, 'injuries'),
+         x = 'Age',
+         y = 'Count') +
+    theme_classic() +
+    theme(legend.position = "right",
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank())
+  print(hist_age_injuries)
+  
+  # plot a line chart showing the number of injuries over 12 months for each year.
+  line_month_injuires <- product_injuries %>%
+    ggplot(aes(x = Month_name, group = Year, color = as.factor(Year))) +
+    geom_line(stat = 'count') +
+    labs(title = paste('The monthly number of', product, 'injuries by year'),
+         x = 'Month',
+         y = 'Count',
+         color = 'Year') +
+    theme_bw() +
+    theme(legend.position = "right",
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_color_brewer(palette="Paired")
+  print(line_month_injuires)
+}
+```
+
+
+##### **4.5** (1 point)
+Test your updated neiss_product_query function on 1 product that you are interested in. Make sure the plots are visible when you call the function.
+
+```{r q.4.5, include = TRUE, warning = FALSE, out.width = '60%'}
+neiss_product_query("scooter")
+```
+
+
+##### **4.6** (3 points)
+We want to combine the plots into one image to make the function’s output neater. Install the `patchwork` package and load it into your R environment. When this package is loaded, you’ll be able to use the “+” operator to make a single image that contains a grid of multiple ggplots. See the reference here: https://patchwork.data-imaginist.com.
+
+Use this new functionality to update your `neiss_product_query` function so that it prints out the sentence and plots one image containing the two plots from 4.4 in a row. Make sure that all labels are legible. Test your updated `neiss_product_query` function on 1 product that you are interested in.
+
+```{r q.4.6, include = TRUE, warning = FALSE, out.width = '100%'}
+#install.packages("patchwork")
+#library(patchwork) # added in the first chunk 
+neiss_product_query <- function(product) {
+  # subset data
+  product_injuries <- neiss_2013_2018 %>%
+    filter(str_detect(Narrative_1, regex(product, ignore_case = TRUE)) | 
+           str_detect(as.character(Product_1), regex(product, 
+                                                     ignore_case = TRUE)))
+  product_injuries <- product_injuries %>%
+    mutate(Age = as.numeric(Age))
+  # calculate average age
+  avg_age <- round(mean(product_injuries$Age), 0)
+  
+  # calculate the most common month/year combination
+  most_common_month_year <- product_injuries %>%
+    group_by(Month_Year) %>%
+    summarise(count = n()) %>%
+    pull(Month_Year)
+  
+  # print out the result
+  cat("Injuries caused by", product, "were highest in", most_common_month_year, 
+      "and injured people who were on average", avg_age, "years old.\n")
+  
+  # plot a histogram for the distribution of ages of injuries involving the product
+  hist_age_injuries <- product_injuries %>%
+    ggplot(aes(x=Age)) +
+    geom_histogram(color="darkblue", fill="lightblue", binwidth=1) +
+    labs(title = paste('Distribution of ages for', product, 'injuries'),
+         x = 'Age',
+         y = 'Count') +
+    theme_classic() +
+    theme(legend.position = "right",
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank())
+  
+  # plot a line chart showing the number of injuries over 12 months for each year.
+  line_month_injuires <- product_injuries %>%
+    ggplot(aes(x = Month_name, group = Year, color = as.factor(Year))) +
+    geom_line(stat = 'count') +
+    labs(title = paste('The monthly number of', product, 'injuries by year'),
+         x = 'Month',
+         y = 'Count',
+         color = 'Year') +
+    theme_bw() +
+    theme(legend.position = "right",
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_color_brewer(palette="Paired")
+  # combine two plots and print
+   print(hist_age_injuries + line_month_injuires)
+}
+
+# test the updated function with "scooter" product
+neiss_product_query("scooter")
+```
+
+
+## Don't Forget to Commit
+
+Please remember to submit your assignment by adding all relevant files to the staging area (in this case the R Markdown file and corresponding knitted PDF) and then committing and pushing them to GitHub classroom.
+
+## Be courteous with knitting
+
+As a final reminder, please be aware of the length of your knitted HTML or PDF file. If you have used code to print or examine something with a very long output, that should not be included in your knitted HTML or PDF. Please double check that there are no overly long print-outs in your HTML or PDF before submitting.

@@ -1,0 +1,591 @@
+---
+title: 'BMI 713 Problem Set #5, Fall 2023 (100 points total)'
+author: "Isabella Liu, Cheryl Gu"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+
+# Overview
+
+
+## Learning objectives
+
+After attending lecture and upon completion of this problem set you should be able to do the following: 
+
+From Lesson 11:
+
+* Estimate the dimensionality of a data set
+* List the benefits of dimensionality reduction
+* Describe how principal component analysis reduces dimensionality
+* Recognize when to use PC scores, eigenvalues, and weights
+* Process data for and run PCA in R
+* Interpret results of PCA with scree plots and weights
+
+From Lesson 12:
+
+* Apply data analysis skills from prior weeks to an RNA-seq dataset
+* Interpret the results of a clustering or PCA analysis
+
+## Instructions
+
+You will be submitting this assignment as a Group Assignment via GitHub Classroom. Your submission will be recorded when you or your partner push a commit to your group repository on GitHub Classroom (instructions below), and you can make as many commits as you want before the deadline. If you are working on this assignment without a partner, you should still make a group of 1 on GitHub Classroom. We will grade assignments based on the latest commit.
+
+### How to commit code to GitHub
+
+1.  Open either GitHub Desktop or a command line terminal and navigate to the repository that contains this assignment (via the GUI or cd command)
+2.  Add the new or modified files to the staging area by either checking the box next to the files or using the command "git add \<filename(s)\>"
+3.  Commit the changes. You are required to include a commit message. This is found in the small text box near the commit button on GitHub Desktop or using the command "git commit -m 'commit message goes here'"
+4.  Push your changes and files to the remote repository. This is done by pressing the push to origin button on GitHub Classroom or with the command "git push"
+
+**Reminder**: If you are working on this assignment with a partner, you will both be editing the same files in GitHub. We expect to see commits from both of you with each of your contributions. Remember to pull your partner's edits to your local computer before editing files. Communicate with each other to make sure you don't overwrite your partner's work.
+
+### What to Submit
+
+You will need to submit **both** an R Markdown file and a knitted HTML or PDF for this assignment. When you finish the assignment, make sure to press the arrow next to the "Knit" button near the top panel of RStudio and select the option to knit to HTML or PDF. Make sure the new HTML or PDF appears in your repository and then follow the steps to commit and push to GitHub classroom. If you are having trouble knitting with the `{txt}` chunks, you can remove those chunks and type your answers outside of the chunks with clear labels.
+
+# Problem 1 (32 pts)
+
+## Using PCA on NEISS data
+
+### 1.1 (6 points)
+
+Using `neiss_2013_2018`, filter out the injuries with Age_Group as `NA`. Summarize the `neiss_2013_2018` dataset into a *counts table* formatted as follows: 
+
+  - A row for each *Age_Group* and a column for each *product code*
+  - Each entry should contain the total number of injuries observed for the corresponding age group and product.
+  - Remove the column with age group labels and make the age group labels the row names instead.
+  - Name your final matrix `counts_mat`.
+
+(Tip 1: Make sure to fill in any resultant NAs with an appropriate value.)
+(Tip 2: If you are manually setting row names, make sure your object is of a class that allows row names, and convert it if not.)
+```{r}
+library(tidyverse)
+library(bmi713neiss)
+library(ggplot2)
+library(stats)
+library(pheatmap)
+```
+
+```{r}
+counts_mat <- neiss_2013_2018 %>%
+  filter(!is.na(Age_Group)) %>%
+  group_by(Age_Group, Product_code) %>%
+  summarise(Count = n()) %>%
+  pivot_wider(names_from = Product_code, values_from = Count, values_fill = 0) %>%
+  column_to_rownames('Age_Group')
+```
+
+### 1.2 (4 points)
+
+What is the difference between calling `prcomp()` on `counts_mat` versus `t(counts_mat)`? Describe in terms of variables, observations, PC scores and weights/loadings, and possible motivations for doing one versus the other.
+
+```{txt}
+prcomp(counts_mat) performs PCA on counts_mat, where variables are product codes, observations are age groups, and PC scores represent patterns of variation in product code usage across age groups for understanding how product codes vary by age groups. 
+prcomp(t(counts_mat)) performs PCA on the transposed matrix, where variables are age groups, observations are product codes, and PC scores represent patterns of variation in age group distribution across product codes. This is useful for understanding how age groups vary by product code usage.
+```
+
+### 1.3 (3 points)
+
+Conduct Principal Components Analysis (PCA) on `counts_mat`, scaled so that each product code column has mean 0 and variance 1. You may scale the data within the PCA function or separately. How many PCs are calculated?
+
+```{r}
+# Add your code here
+pca_result <- prcomp(counts_mat, scale = TRUE)
+num_pcs <- ncol(pca_result$rotation)
+```
+
+```{txt}
+# How many PCs are calculated?
+12 PCs are calculated
+
+```
+
+
+### 1.4 (2 points)
+
+Create a scree plot for this PCA result (barplot or lineplot is acceptable).
+
+```{r}
+variance_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
+
+qplot(c(1:12), variance_explained) + 
+  geom_line() + 
+  xlab("Principal Component") + 
+  ylab("Variance Explained") +
+  ggtitle("Scree Plot for PCA") +
+  ylim(0, 1)
+```
+
+### 1.5 (4 points)
+
+How many principal components are required to explain >=90% of variation in the data? Write a function that can take in a PCA object as its input and return this number.
+
+```{r}
+# Add your code here
+components <- function(pca_object, threshold = 0.9) {
+  variance_explained <- pca_object$sdev^2 / sum(pca_object$sdev^2)
+  cumulative_variance <- cumsum(variance_explained)
+  num_components <- sum(cumulative_variance < threshold) + 1
+  return(num_components)
+}
+
+components(pca_result)
+```
+
+```{txt}
+# How many principal components are required to explain >=90% of variation in the data?
+5 
+```
+
+
+
+### 1.6 (4 points)
+
+Make two scatter plots of *products* plotted in terms of (scatter plot 1) PC1 and PC2 and (scatter plot 2) PC3 and PC4 scores. Plot each point with corresponding age groups as labels.
+
+```{r}
+pc_scores <- data.frame(
+  PC1 = pca_result$x[, 1],
+  PC2 = pca_result$x[, 2],
+  PC3 = pca_result$x[, 3],
+  PC4 = pca_result$x[, 4],
+  Product = rownames(counts_mat),
+  Age_Group = rownames(counts_mat)
+)
+
+ggplot(pc_scores, aes(x = PC1, y = PC2, label = Age_Group)) +
+  geom_point() +
+  geom_text(vjust = 1) +
+  labs(
+    x = "PC1",
+    y = "PC2",
+    title = "Scatter Plot of Products for PC1 vs. PC2"
+  )
+
+ggplot(pc_scores, aes(x = PC3, y = PC4, label = Age_Group)) +
+  geom_point() +
+  geom_text(vjust = 1) +
+  labs(
+    x = "PC3",
+    y = "PC4",
+    title = "Scatter Plot of Products for PC3 vs. PC4"
+  )
+
+```
+
+
+### 1.7 (3 points)
+
+From the two plots in 1.6, are there any outlying age groups in each of the plots? Describe what makes the outliers different from the other age groups in terms of PCs (e.g. "outlier age group #1 has lower value in PC1 and higher value in PC2")?
+
+```{txt}
+In the Scatter Plot of Products for PC1 vs. PC2, Children seems to be an outlier because it is in the upper right corner and isolated by other age groups. It has higher values in PC1 and PC2. In the Scatter Plot of Products for PC3 vs. PC4, Adolescents stand out on the upper left corner. It has higher values in PC4 and lower values in PC3.
+
+```
+
+### 1.8 (6 points)
+
+We want to know more about the outlying age group you observed in the plot of **PC3 and PC4**. Find the top 10 product codes with the largest PC3 weight/loading in the direction of the outlier (i.e., if the outlier had a very large positive PC3 value, then we want the product codes with the largest positive weight on PC3. If the outlier had a very large negative PC3 value, then we want the codes with the largest negative weight on PC3.) 
+
+Then, load the `products.txt` table (provided in this repo, also available from prior weeks) to look up these 10 product codes and their corresponding product names. Make one observation about what might be unique about the outlying age group based on these products with large weights.
+
+```{r}
+# Add your code here
+products <- read.table("products.txt", header = TRUE, sep = "\t")
+pc3_loadings <- pca_result$rotation[, 3]
+
+top_10_product_info <- pc3_loadings %>%
+  enframe(name = "Product_Code", value = "Loading") %>%
+  arrange(desc(abs(Loading))) %>%
+  head(10)
+
+top_10_product_info$Product_Code <- as.integer(top_10_product_info$Product_Code)
+top_10_product_info <- top_10_product_info %>%
+  left_join(products, by = c("Product_Code" = "Code"))
+top_10_product_info
+```
+
+
+```{txt}
+# Make one observation about what might be unique about the outlying age group based on the high-weight products.
+The top 10 product codes with the largest PC3 weight/loading in the direction of the outlier which have large negative PC3 are all NAs. It suggests the Adolescents grouo may have lower engagemant or preference.
+
+
+```
+
+# Problem 2 (12 pts)
+
+## Getting familiar with TCGA RNA-seq
+
+We will next use the same data analysis skills to study bulk RNA-seq data of ovarian carcinoma samples from the TCGA-OV project. For this analysis, **download the file `ps5_OV_data.rData` from the Problem Set 5 Canvas Assignment.** Run the code below to load the a set of objects which have been packaged into a single, compressed file called `ps5_OV_data.rData`. Once you load these data, you will see three new objects appear in your R environment:
+
+  - OVMatrix_norm: processed gene expression table of genes x samples
+  - sample_metadata: variables measured for each sample
+  - gene_metadata: variables measured for each gene
+  
+Briefly explore these objects to familiarize yourself with their structures.
+
+```{r}
+load("~/Downloads/ps5_OV_data.rData")
+```
+
+
+### 2.1 (3 points)
+
+`sample_metadata` is a data frame of sample-level attributes. Find the column in `sample_metadata` that contains the age of each participant at the index time of the study. 
+
+Create a new column in `sample_metadata` that contains the `age_group` of each participant, one for each decade of life (0-9, 10-19, 20-29, etc.). If the age is unknown, make sure that is documented in your `age_group` column.
+
+Print the number of participants in each age group.
+
+```{r message=FALSE, warning=FALSE}
+age_group_function <- function(age) {
+  if (is.na(age)) {
+    return("Unknown")
+  }
+  age_group <- floor(age / 10) * 10 
+  age_group <- paste(age_group, "-", age_group + 9)
+  return(age_group)
+}
+
+sample_metadata$age_group <- sapply(sample_metadata$age_at_index, age_group_function)
+table(sample_metadata$age_group)
+```
+
+### 2.2 (4 points)
+
+The TCGA ovarian dataset includes people with diverse demographics and disease status. We want to explore a few key traits of the samples to see their distribution in this dataset. Create three barplots, each showing the number of samples per category for each of the following variables:
+
+  - First barplot: age_group
+  - Second barplot: race
+  - Third barplot: vital_status
+  
+Make sure your plots have informative titles and that all text is legible.
+
+```{r}
+ggplot(sample_metadata, aes(x = age_group)) +
+  geom_bar() +
+  labs(title = "Distribution of Age Group",
+       x = "Age Group",
+       y = "Number of Samples") +
+  geom_text(stat = "count", aes(label = after_stat(count)), vjust = -0.5)
+
+ggplot(sample_metadata, aes(x = race)) +
+  geom_bar() +
+  labs(title = "Distribution of Race",
+       x = "Race",
+       y = "Number of Samples") +
+  geom_text(stat = "count", aes(label = after_stat(count)), vjust = +0.3) +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+
+
+ggplot(sample_metadata, aes(x = vital_status)) +
+  geom_bar() +
+  labs(title = "Distribution of Vital Status",
+       x = "Vital Status",
+       y = "Number of Samples") +
+  geom_text(stat = "count", aes(label = after_stat(count)), vjust = -0.5)
+
+```
+
+### 2.3 (2 points)
+
+Make two observations about the distributions of any of the variables you plotted in 2.4. (one sentence each)
+
+```{txt}
+There are 6 categories in race with one category is 'not reported'.
+White has the most counts(363) and native hawaiian or other pacific islander has 1 count.
+```
+
+
+
+### 2.4 (3 points)
+
+`gene_metadata` is a data frame of gene-level attributes. A column in `gene_metadata` named `nsamples_expressed` has been pre-computed to show the number of samples in which at least 10 copies of the gene were detected (i.e., number of samples where the expression level was >= 10). Use that column to subset the `OVMatrix_norm` matrix to genes with counts >= 10 in at least 45 samples. Name the resulting matrix `OVMatrix_norm_filter`. How many genes are in this matrix?
+
+```{r}
+# Add your code here
+genes <- which(gene_metadata$nsamples_expressed >= 45)
+OVMatrix_norm_filter <- OVMatrix_norm[genes, ]
+nrow(OVMatrix_norm_filter)
+```
+
+
+```{txt}
+# How many genes are in this matrix?
+29353 genes are in this matrix
+
+```
+
+
+# Problem 3 (21 pts)
+
+## PCA of RNA-seq
+
+### 3.1 (3 points)
+
+Use `prcomp()` to conduct Principal Components Analysis (PCA) on the normalized and filtered gene expression matrix: once without scaling or centering (save this as `pca_noscale`) and once with genes scaled to each have mean 0 and variance 1 (save this as `pca_scale`). Be sure to orient your data so that the PCA treats samples as observations and genes as variables. 
+
+```{r}
+OVMatrix_norm_filter_t <- t(OVMatrix_norm_filter)
+OVMatrix_norm_filter_t_scaled <- scale(OVMatrix_norm_filter_t)
+pca_noscale <- prcomp(OVMatrix_norm_filter_t, center = FALSE, scale. = FALSE)
+pca_scale <- prcomp(OVMatrix_norm_filter_t_scaled, scale. = TRUE)
+```
+
+### 3.2 (4 points)
+
+We want to identify the most important genes in this dataset. One way we can do this is based on each gene's contribution to variation across the samples, which is quantified through the genes' weights in the PCA.
+
+Calculate each gene's overall importance by summing the unsigned *magnitude* (i.e., the absolute value) of its weights along the first 10 PCs, for the `pca_noscale` and `pca_scale` solutions separately. Create a data frame to save your results. The data frame should have three columns: `gene_id`, `gene_impt_noscale` and `gene_impt_scale`.
+
+```{r}
+weights_noscale <- pca_noscale$rotation[, 1:10]
+weights_scale <- pca_scale$rotation[, 1:10]
+gene_impt_noscale <- rowSums(abs(weights_noscale))
+gene_impt_scale <- rowSums(abs(weights_scale))
+
+genes_importance <- data.frame(
+  gene_id = rownames(weights_noscale),
+  gene_impt_noscale = gene_impt_noscale,
+  gene_impt_scale = gene_impt_scale
+)
+```
+
+### 3.3 (3 points)
+
+We are interested in whether genes with more variable expression across samples are more likely to have higher importance in the PCA. Instead of using the variance, another way we can quantify the variability of a gene is with the Median Absolute Deviation (MAD) statistic. (If you're interested, you can read more here: https://www.r-bloggers.com/2013/08/absolute-deviation-around-the-median/) 
+
+The `stats` package provides a function to compute Median Absolute Deviation: `mad()`. Use this function to compute MAD scores for each gene in `OVMatrix_norm`, and save them in a `MAD_score` column in your `gene_metadata` dataframe.
+
+```{r}
+MAD_scores <- apply(OVMatrix_norm, 1, mad)
+gene_metadata$MAD_score <- MAD_scores
+```
+
+### 3.4 (2 points)
+
+Use a `**_join()` function from tidyverse to add your gene importance scores from the data frame in 3.2 to your `gene_metadata` dataframe. Choose a `**_join()` function that will keep all rows in `gene_metadata`.
+
+```{r}
+gene_metadata_merged <- left_join(gene_metadata, genes_importance, by = "gene_id")
+```
+
+### 3.5 (4 points)
+
+Make two scatterplots from `gene_metadata`: one with MAD scores versus `gene_impt_noscale` and one with MAD scores versus `gene_impt_scale`. In ~2-3 sentences, answer the following questions: What relationships do you see between MAD and gene importance in these plots? Why does the relationship between MAD and gene importance differ between these plots?
+
+```{r}
+# Add your code here
+gene_metadata_merged %>% ggplot(aes(x=MAD_score, y=gene_impt_noscale)) +
+  geom_point() +
+  theme_classic() +
+  labs(title = "MAD scores vs. genes of importance (noscale)")
+
+gene_metadata_merged %>% ggplot(aes(x=MAD_score, y=gene_impt_scale)) +
+  geom_point() +
+  theme_classic() +
+  labs(title = "MAD scores vs. genes of importance (scale)")
+```
+
+```{txt}
+# What relationships do you see between MAD and gene importance in these plots?
+From both plots, we observe a positive correlation in general between MAD scores and gene importance. It indicates that genes with more variable expression across samples (MAD) would have higher importance represented in PCA.
+
+
+# Why does the relationship between MAD and gene importance differ between these plots?
+Scaling through standardizatio would affect the result of importance in PCA since it converts the data to mean of 0 and standard deviation of 1. Performing PCA on uuscaled variables may lead to exponentially large weights for variables with high variance, which is why we observe larger gene importance in nonscale data and the correlation with MAD in nonscale seems to be larger as well. 
+(cite: https://www.analyticsvidhya.com/blog/2016/03/pca-practical-guide-principal-component-analysis-python)
+
+```
+
+### 3.6 (5 points)
+
+Subset your `OVMatrix_norm_filter` matrix such that it only includes the top 1000 genes with highest MAD. Run PCA with these new data, scaling each gene to each have mean 0 and variance 1. Remember to orient your data so that the PCA treats samples as observations and genes as variables. Save the result to a variable called `pca_scale_MAD`.
+
+```{r}
+top_1000_genes <- head(order(gene_metadata_merged$MAD_score, decreasing = TRUE), 1000)
+subset_OVMatrix_norm_filter<- OVMatrix_norm_filter[gene_metadata$gene_id[top_1000_genes], ]
+scaled_subset<- scale(subset_OVMatrix_norm_filter)
+pca_scale_MAD <- prcomp(t(scaled_subset), scale. = TRUE)
+```
+
+# Problem 4 (35 pts)
+
+## New insights into the data
+
+### 4.1 (6 pts)
+Use the `pheatmap` function and create a heatmap with the gene expression matrix after filtering in 3.6. Format your heatmap as follows:
+
+  - Scale the colors for each gene (use the argument to the pheatmap function that lets you do this, rather than scaling the gene expression matrix manually)
+  - Use the `colorRampPalette` function to change the colors to a palette of 100 values spanning from red to green. Include the following argument in `colorRampPalette` to get the right intervals: `breaks=seq(-2,2,length.out=100)`
+  - You do not need to show row names or column names on the heatmap.
+  
+Tip #1: If you need some pointers on how to make a heatmap, here is a helpful tutorial: https://slowkow.com/notes/pheatmap-tutorial/. We will also practice in class on Tuesday 10/17.
+Tip #2: If you need some pointers on how to use colorRampPalette, here is a helpful guide: https://bookdown.org/rdpeng/exdata/plotting-and-color-in-r.html#colorramppalette
+
+```{r}
+pal <- colorRampPalette(c("red", "green"))(100)
+breaks_values <- seq(-2, 2, length.out=100)
+
+pheatmap(subset_OVMatrix_norm_filter,   
+         breaks = breaks_values,
+         scale = "row",                    
+         color = pal,                   
+         show_rownames = FALSE,            
+         show_colnames = FALSE)          
+```
+
+### 4.2 (4 points)
+
+Set your seed to 713, and cluster patient samples by k-means clustering on the first 10 PCs of `pca_scale_MAD` with k=4 and 1000 random starts (reminder: this is one of the arguments for kmeans). Save the cluster assignments to a new column in `sample_metadata`.
+
+```{r}
+set.seed(713)
+kmeans_result <- kmeans(pca_scale_MAD$x[,1:10], 4, nstart = 1000)
+sample_metadata$cluster <- kmeans_result$cluster
+```
+
+### 4.3 (3 points)
+
+Make a scatterplot with PC1 scores on the x axis, PC2 scores on the y axis, and color by kmeans cluster.
+
+```{r}
+pca_df <- data.frame(pca_scale_MAD$x)
+pca_df %>% ggplot(aes(PC1, PC2, color = factor(kmeans_result$cluster))) + 
+  geom_point(size = 2) +
+  labs(color = "Kmeans Cluster", title = 'K-means Clustering on PC1 and PC',
+       color = "cluster")
+```
+
+### 4.4 (10 pts)
+
+These samples are a subset of the samples studied in the original TCGA-OV RNA-seq paper: https://www.nature.com/articles/nature10166. Open the Supplementary Methods for this paper and find the section titled "Subtype discovery and validation" on page 49 of the PDF. Answer the following questions about their clustering approach:
+
+1. How many highly variable genes did they select based on MAD for their analysis? How many did we use?
+```{txt}
+They used 1,500 most variable genes selected base on MAD.
+We used 1,000 genes.
+```
+
+2. How many samples did they include in their dimensionality reduction and clustering analyses? How many are we using?
+```{txt}
+They used 245 samples in dimensionality reduction and clustering analyses
+We used 421 samples.
+```
+
+3. They used a combined dimensionality reduction and clustering approach called NMF clustering. This method requires setting a value of k for the number of clusters. What range of k values did the authors test?
+```{txt}
+They tested k=2 to k=6.
+```
+
+4. They ultimately chose k = 4. What are the names of the four clusters they defined? (You can also find these in the main article.)
+```{txt}
+The four clustered are: differentiated, immunoreactive, mesenchymal and proliferative.
+```
+
+5. The authors also used silhouette scores, but for a different purpose than we've been using them in class. They used silhouette scores to define outliers in each cluster. Briefly describe (2-3 sentences) why silhouette scores would be useful for finding outliers in a cluster.
+```{txt}
+The authors defined "silhouette width as the ratio of average distance of each sample to samples in the same cluster to the smallest distance to samples not in the same cluster", which means that this score provides a measure of how similar an object is to its own cluster compared to other cluster. "If silhouette width is close to ‐1, it means that sample is misclassified", this lower silhouette score suggests poor matching with its own cluster, therefore would become a potential outlier in a cluster.
+```
+
+### 4.5 (6 pts)
+Now that we know more about the original paper, let's return to our re-analysis of the data. In the paper, they identified several marker genes whose expression differed across the four subtypes. Here are the ENSEMBL ids (`gene_id`) for four of them and their corresponding subtypes:
+
+  - ENSG00000169248.13 (CXCL11): immunoreactive
+  - ENSG00000149948.14 (HMGA2): proliferative
+  - ENSG00000124107.5 (SLPI): differentiated
+  - ENSG00000136859.10 (ANGPTL2): mesenchymal
+
+Add the expression values for each of these genes from `OVMatrix_norm` as four new columns in `sample_metadata`. Use any plot(s) of your choice to visualize whether the expression of these genes indeed varies across the clusters you defined through k-means clustering. Based on your observations, which subtypes do the kmeans clusters each represent? Include your observation and reasoning.
+
+```{r}
+# Add your code here
+sample_metadata$CXCL11 <- OVMatrix_norm["ENSG00000169248.13", ]
+sample_metadata$HMGA2 <- OVMatrix_norm["ENSG00000149948.14", ]
+sample_metadata$SLPI <- OVMatrix_norm["ENSG00000124107.5", ]
+sample_metadata$ANGPTL2 <- OVMatrix_norm["ENSG00000136859.10", ]
+
+sample_metadata %>% ggplot(aes(x = as.factor(cluster), 
+                               y = CXCL11, 
+                               fill = as.factor(cluster))) +
+  geom_boxplot() +
+  labs(title = "Expression of CXCL11 across clusters", 
+       y = "Expression value", 
+       x = "Cluster",
+       fill = "Cluster") 
+
+sample_metadata %>% ggplot(aes(x = as.factor(cluster), 
+                               y = HMGA2, 
+                               fill = as.factor(cluster))) +
+  geom_boxplot() +
+  labs(title = "Expression of HMGA2 across clusters", 
+       y = "Expression value", 
+       x = "Cluster",
+       fill = "Cluster") 
+
+sample_metadata %>% ggplot(aes(x = as.factor(cluster), 
+                               y = SLPI, 
+                               fill = as.factor(cluster))) +
+  geom_boxplot() +
+  labs(title = "Expression of SLPI across clusters", 
+       y = "Expression value", 
+       x = "Cluster",
+       fill = "Cluster") 
+
+sample_metadata %>% ggplot(aes(x = as.factor(cluster), 
+                               y = ANGPTL2, 
+                               fill = as.factor(cluster))) +
+  geom_boxplot() +
+  labs(title = "Expression of ANGPTL2 across clusters", 
+       y = "Expression value", 
+       x = "Cluster",
+       fill = "Cluster") 
+```
+
+```{txt}
+# Which subtypes do the kmeans clusters each represent?
+These four genes express distinctively across the 4 clusters. To be more specific, CXCL11 has the highest expression in cluster 3, representing this cluster is immunoreactive subtype.  HMGA2 has the highst expression in cluster 1, which corresponds to proliferative subtype. SLP1 has the highest expression in cluster 4, indicating the differentiated subtype. ANGPTL2 has the highest expression in cluster 2, meaning it is mesenchymal type.
+```
+
+### 4.6 (6 pts)
+
+For each cluster, calculate the proportion of how many patients are alive or dead based on their `vital status` (found in the sample metadata). Then, plot the proportions of alive vs. dead in each cluster in a stacked barplot where the bars are colored based on the vital status. The x axis labels should be the subtypes that you assigned to the clusters in 4.5, not just the cluster numbers. Make one observation based on the proportions you see. 
+
+```{r}
+# Add your code here
+prop <- sample_metadata %>%
+  group_by(cluster, vital_status) %>%
+  tally() %>%
+  group_by(cluster) %>%
+  mutate(total = sum(n)) %>%
+  mutate(proportion = n/total) 
+
+subtype_names <- c("Proliferative", "Mesenchymal", "Immunoreactive", "Differentiated")
+
+prop %>% ggplot(aes(x = factor(cluster, labels = subtype_names), 
+                    y = proportion, fill = vital_status)) +
+  geom_bar(stat = "identity", position = "stack") +
+  labs(
+    title = "Proportion of Vital Status by Subtype",
+    x = "Subtype",
+    y = "Proportion"
+  ) 
+```
+
+
+```{txt}
+# Make one observation based on the proportions you see. 
+Among the 4 subtypes, the immunoreactive subtype has a significantly higher alive proportion in patients, the other 3 subtypes have very similar alive vs. dead proportions.
+```
+
+## Don't Forget to Commit
+
+Please remember to submit your assignment by adding all relevant files to the staging area (in this case the R Markdown file and corresponding knitted HTML or PDF) and then committing them to GitHub classroom.
+
+## Be courteous with knitting
+
+As a final reminder, please be aware of the length of your knitted HTML or PDF file. If you have used code to print or examine something with a very long output, that should not be included in your knitted HTML or PDF. Please double check that there are no overtly long print-outs in your HTML or PDF before submitting.

@@ -1,0 +1,126 @@
+---
+title: 'BMI 713 Problem Set #4 Question 2, Fall 2023'
+author: "Cheryl Gu"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+## Problem 2: Interactive clustering analysis on O2portal (24 points)
+
+For this question, you will use RStudio through the online O2portal to conduct cluster and visualize the cleaned data. 
+
+Go to the O2portal website (https://o2portal.rc.hms.harvard.edu/pun/sys/dashboard) and launch an RStudio session. Choose the priority partition, 1 core, 5 hours of runtime, and 1 GB of memory. Make sure you load the necessary modules to run R in the "Modules to be loaded" section. Check the "Make /n/groups available" box.
+
+Once your RStudio session launches, copy the R markdown file from /n/groups/training/bmi713/2023_problemset4_Q2.Rmd to your working directory. (You can either do this from the terminal in the RStudio session, or from a separate Terminal/GitBash session on your local computer.) Go through the rest of Problem 2 in the R Markdown file on O2portal.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Add code to load all necessary libraries here
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(ggplot2)
+library(tibble)
+library(cowplot)
+```
+
+##### 2.1 (1 point) 
+
+Read the `neiss_cleaned.csv` file you saved in question 1.6 to a data frame called `neiss_cleaned`. 
+
+```{r}
+neiss_cleaned <- read.csv("~/neiss_cleaned.csv")
+```
+
+##### 2.2 (5 points) 
+
+Imagine we want to cluster the body parts in this dataset based on the age and day of the year using k-means. Generate a table where the rows are body parts and there are two numeric columns: average age and median day of the year. (Hint: lubridate has a function to generate the day of the year.)
+
+```{r}
+neiss_cleaned$day_of_year <- yday(as.Date(neiss_cleaned$Treatment_Date))
+body_parts <- neiss_cleaned %>%
+  group_by(Body_Part) %>%
+  summarise(
+    avg_age = mean(Age, na.rm = TRUE),
+    median_day_of_year = median(day_of_year, na.rm = TRUE)) %>%
+  column_to_rownames(var = "Body_Part")
+```
+
+##### 2.3 (3 points)  
+
+Make a scatter plot of the body parts, with average age on the x axis and median day of year on the y axis. Your points do not need to be labeled. Make sure that your scatter plot has informative title and axis titles and that all text is legible.
+
+```{r}
+body_parts %>% ggplot() +
+  aes(x=avg_age, y=median_day_of_year) +
+  geom_point() +
+  labs(
+    title = "Body Parts by Average Age vs. Median Day of Year",
+    x = "Average Age",
+    y = "Median Day of Year"
+  ) +
+  theme_classic()
+```
+
+### 2.4 (3 points)
+
+*Scale* both the average age and the average day of year such that both have a mean of 0 and a variance of 1 and save the new data as a variable called `neiss_scaled`. Save `neiss_scaled` as a CSV file in your working directory for future use.  
+
+```{r}
+neiss_scaled <- body_parts %>%
+  mutate(
+    scaled_avg_age = scale(avg_age),
+    scaled_median_day_of_year = scale(median_day_of_year)
+  )
+write.csv(neiss_scaled, "neiss_scaled.csv", row.names = FALSE)
+```
+
+### 2.5 (9 points)
+
+Run k-means clustering with k=3 and default centroid initialization on the raw data, and separately on the scaled data. Make side-by-side scatter plots of the body parts (as in 2.3) where the points are colored by their cluster assignment: the left-side scatter plot should be colored by clusters from the raw data, the right-side scatter plot should be colored by clusters from the scaled data. (There are multiple ways you can make these side-by-side plots — we do not have a preference, as long as the plots are in the same image.) If you want to use a function that is not in the packages you installed in 1.5, you can install the necessary package(s) now.
+
+*Reminder: at the top of any `{r}` chunk that calls the k-means clustering algorithm, set your seed equal to 713.* 
+
+```{r}
+set.seed(713)
+k = 3
+kclusters_raw <- kmeans(body_parts, k)
+kclusters_scaled = kmeans(neiss_scaled, k)
+plot_raw <- ggplot(body_parts, aes(x=avg_age, y=median_day_of_year, color=as.factor(kclusters_raw$cluster))) +
+  geom_point() +
+  labs(
+    title = "K means clustering (k=3) with Raw Data",
+    x = "Average Age",
+    y = "Median Day of Year"
+  ) +
+  scale_color_discrete(name="Cluster") +
+  theme_classic()
+
+# Scatter plot for scaled data
+plot_scaled <- ggplot(neiss_scaled, aes(x=scaled_avg_age, y=scaled_median_day_of_year, color=as.factor(kclusters_scaled$cluster))) +
+  geom_point() +
+  labs(
+    title = "K means clustering (k=3) with Scaled Data",
+    x = "Average Age (scaled)",
+    y = "Median Day of Year (scaled)"
+  ) +
+  scale_color_discrete(name="Cluster") +
+  theme_classic()
+
+# Combine the two plots side by side
+plot_grid(plot_raw, plot_scaled, labels = c('A', 'B'))
+```
+
+### 2.6 (3 points)
+
+Describe how the clustering results differ when using scaled and unscaled data. Provide an explanation for this difference.
+
+```{txt}
+The main difference is the cluster assignment in regard to the two extreme data values. One possible reason is dut to the default centroids may be pulled towards outliers/extreme values, and results into a larger clusters that include the outliers.
+```
+
+Once you complete Problem 2, **knit your Rmd file to an HTML on O2 and then copy the Rmd and HTML files to your Problem Set #4 repository on your local computer**. You will include these in your submission. 
+For file transfer between O2 and local machine, refer to the guidance in the `BMI713_copyFiles.pdf` on Canvas (https://canvas.harvard.edu/courses/125814/files/folder/Week%205?preview=18410800) or the O2 Wiki about file transfer (https://harvardmed.atlassian.net/wiki/spaces/O2/pages/1588662157/File+Transfer).  
